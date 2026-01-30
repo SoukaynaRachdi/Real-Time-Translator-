@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Image Similarity Dashboard</title>
+        <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+    
+</head>
+<body>
+<header>
+    <div class="logo">📝 Real-Time Translator</div>
+    <nav>
+        <ul>
+            <li><a href="#home">Home</a></li>
+            <li><a href="#traduction">Traduction</a></li>
+            <li><a href="#similarite">Recherche</a></li>
+            <li><a href="#similarite_textes">Comparer deux textes</a></li>
+            <li><a href="#plagiat">Plagiat</a></li>
+            <li>
+        {% if session.get('is_admin') %}
+            <a href="{{ url_for('logout') }}" class="">Logout</a>
+        {% else %}
+            <a href="{{ url_for('login') }}" class="">Login</a>
+        {% endif %}
+    </li>
+            
+
+        </ul>
+    </nav>
+</header>
+<section id="home" class="hero">
+    <div class="hero-content">
+        <h1>Bienvenue sur <span class="typed">Real-Time Translator</span></h1>
+        <p class="pp">Traduisez, Comparez et Vérifiez vos textes en temps réel avec intelligence artificielle</p>
+        <div class="hero-buttons">
+            <a href="#traduction" class="btn btn-primary">Commencer</a>
+        </div>
+    </div>
+    <div class="hero-image">
+        <img src="https://cdn-icons-png.flaticon.com/512/290/290780.png" alt="Translator Illustration">
+    </div>
+</section>
+<section id="traduction" class="section features">
+    <h2>Traduction Multilingue</h2>
+    <div class="selects">
+        <select id="sourceLang"></select>
+        <select id="targetLang"></select>
+    </div>
+    <textarea id="texte" placeholder="Tapez votre texte ici"></textarea>
+    <button class="btn btn-primary" onclick="traduire()">Traduire</button>
+    <div id="resultat" class="resultat"></div>
+</section>
+<section id="similarite" class="section features">
+    <h2>Recherche par texte</h2>
+    <textarea id="texte_similarite" placeholder="Tapez un texte pour rechercher"></textarea>
+    <button class="btn btn-primary" onclick="rechercheTexte()">Rechercher</button>
+    <div id="resultat_similarite" class="resultat"></div>
+</section>
+<section id="similarite_textes" class="section features">
+    <h2>Comparer deux textes</h2>
+    <textarea id="texte1" placeholder="Texte 1"></textarea>
+    <textarea id="texte2" placeholder="Texte 2"></textarea>
+    <button class="btn btn-primary" onclick="verifierSimilariteDeuxTextes()">Vérifier Similarité</button>
+    <div id="resultat_similarite_deux" class="resultat"></div>
+</section>
+<section id="plagiat" class="section features">
+    <h2>Vérification de Plagiat</h2>
+    <textarea id="texte_plagiat" placeholder="Tapez le texte à vérifier"></textarea>
+    <button class="btn btn-primary" onclick="verifierPlagiat()">Vérifier Plagiat</button>
+    <div id="resultat_plagiat" class="resultat"></div>
+</section>
+
+
+<div class="container py-4 fade-in">
+    <section class="section features">
+    <h1 class="text-center mb-4">Recherche par image</h1>
+
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        {% for msg in messages %}
+          <div class="alert alert-success text-center">{{ msg }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <!-- Upload -->
+    {% if session.get("is_admin") %}
+<div class="glass">
+    <h4>Upload Image</h4>
+    <form action="/images" method="POST" enctype="multipart/form-data" class="d-flex gap-2">
+        <input type="file" name="image" class="form-control" required>
+        <button class="btn btn-success">Upload</button>
+    </form>
+</div>
+{% endif %}
+
+
+    <!-- Search -->
+    <div class="glass">
+        
+        <form action="/images" method="POST" enctype="multipart/form-data" class="d-flex gap-2">
+            <input type="file" name="query_image" class="form-control" required>
+            <button class="btn btn-primary">Search</button>
+        </form>
+    </div>
+
+    <!-- Results -->
+    {% if image_results %}
+        <h3 class="mb-3">Results</h3>
+        <div class="row g-3">
+            {% for score, filename in image_results %}
+                <div class="col-lg-3 col-md-4 col-sm-6">
+                    <div class="card p-2 shadow-sm">
+                        <img src="{{ url_for('uploaded_file', filename=filename) }}" alt="Image">
+                        <div class="similarity text-center">Similarity: {{ "%.2f"|format(score) }}</div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+</section>
+</div>
+<footer>
+    <p>&copy; 2026 Real-Time Translator</p>
+</footer>
+<script>
+// ---------------- Charger langues ----------------
+async function loadLangues() {
+    const response = await fetch('/langues');
+    const data = await response.json();
+    const sourceSelect = document.getElementById('sourceLang');
+    const targetSelect = document.getElementById('targetLang');
+
+    const autoOption = document.createElement('option');
+    autoOption.value = 'auto';
+    autoOption.text = 'Auto';
+    sourceSelect.appendChild(autoOption);
+
+    for (const code in data) {
+        const name = data[code];
+        const option1 = document.createElement('option');
+        option1.value = code;
+        option1.text = name.charAt(0).toUpperCase() + name.slice(1);
+        sourceSelect.appendChild(option1);
+
+        const option2 = document.createElement('option');
+        option2.value = code;
+        option2.text = name.charAt(0).toUpperCase() + name.slice(1);
+        targetSelect.appendChild(option2);
+    }
+
+    targetSelect.value = 'en';
+}
+
+// ---------------- Traduction ----------------
+async function traduire() {
+    const texte = document.getElementById('texte').value;
+    const sourceLang = document.getElementById('sourceLang').value;
+    const targetLang = document.getElementById('targetLang').value;
+
+    const response = await fetch('/traduire', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texte, sourceLang, targetLang })
+    });
+    const data = await response.json();
+    document.getElementById('resultat').innerText = data.traduction || 'Erreur : ' + data.error;
+}
+
+// ---------------- Recherche texte ----------------
+async function rechercheTexte() {
+    const texte = document.getElementById("texte_similarite").value;
+    const response = await fetch("/recherche", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ texte })
+    });
+    const data = await response.json();
+    const container = document.getElementById("resultat_similarite");
+    container.innerHTML = "";
+
+    if (data.resultats && data.resultats.length > 0) {
+        data.resultats.forEach(doc => {
+            const div = document.createElement("div");
+            div.classList.add("resultat");
+            div.innerHTML = `<p><strong>Texte original:</strong> ${doc.texte_original}</p>
+                             <p><strong>Traduction:</strong> ${doc.texte_traduit}</p>`;
+            container.appendChild(div);
+        });
+    } else container.innerText = "Aucun texte trouvé.";
+}
+
+// ---------------- Comparer deux textes ----------------
+async function verifierSimilariteDeuxTextes() {
+    const texte1 = document.getElementById("texte1").value;
+    const texte2 = document.getElementById("texte2").value;
+
+    const response = await fetch("/similarite_deux_textes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ texte1, texte2 })
+    });
+    const data = await response.json();
+    const container = document.getElementById("resultat_similarite_deux");
+    if(data.similarite !== undefined){
+        container.innerText = `Score de similarité : ${data.similarite.toFixed(2)}`;
+    } else container.innerText = "Erreur : " + data.error;
+}
+
+// ---------------- Plagiat ----------------
+async function verifierPlagiat() {
+    const texte = document.getElementById("texte_plagiat").value;
+    const response = await fetch("/plagiat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ texte })
+    });
+    const data = await response.json();
+    const container = document.getElementById("resultat_plagiat");
+    container.innerHTML = "";
+
+    if(data.plagiat && data.plagiat.length > 0){
+        data.plagiat.forEach(doc => {
+            const div = document.createElement("div");
+            div.classList.add("resultat");
+            div.innerHTML = `<p><strong>Texte original:</strong> ${doc.texte_original}</p>
+                             <p><strong>Traduction:</strong> ${doc.texte_traduit}</p>
+                             <small>Score de similarité: ${doc.score.toFixed(2)}</small>`;
+            container.appendChild(div);
+        });
+    } else container.innerText = "Aucun plagiat détecté (seuil > 0.7).";
+}
+
+// ---------------- Recherche par image ----------------
+
+
+// ---------------- Charger langues ----------------
+loadLangues();
+</script>
+
+</body>
+</html>
