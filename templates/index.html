@@ -111,14 +111,14 @@
     {% if image_results %}
         <h3 class="mb-3">Results</h3>
         <div class="row g-3">
-            {% for score, filename in image_results %}
-                <div class="col-lg-3 col-md-4 col-sm-6">
-                    <div class="card p-2 shadow-sm">
-                        <img src="{{ url_for('uploaded_file', filename=filename) }}" alt="Image">
-                        <div class="similarity text-center">Similarity: {{ "%.2f"|format(score) }}</div>
-                    </div>
-                </div>
-            {% endfor %}
+          {% for img in image_results %}
+<div class="col-lg-3 col-md-4 col-sm-6">
+    <div class="card p-2 shadow-sm">
+        <img src="{{ url_for('uploaded_file', filename=img.filename) }}" alt="{{ img.filename }}">
+        <div class="similarity text-center">Similarity: {{ img.score }}</div>
+    </div>
+</div>
+{% endfor %}
         </div>
     {% endif %}
 </section>
@@ -226,12 +226,12 @@ async function verifierPlagiat() {
         data.plagiat.forEach(doc => {
             const div = document.createElement("div");
             div.classList.add("resultat");
-            div.innerHTML = `<p><strong>Texte original:</strong> ${doc.texte_original}</p>
-                             <p><strong>Traduction:</strong> ${doc.texte_traduit}</p>
-                             <small>Score de similarité: ${doc.score.toFixed(2)}</small>`;
+            div.innerHTML = `<p><strong>Texte original:</strong> ${doc.source_originale}</p>
+                 <p><strong>Traduction:</strong> ${doc.texte_traduit}</p>
+                 <small>Score: ${doc.score.toFixed(2)}</small>`;
             container.appendChild(div);
         });
-    } else container.innerText = "Aucun plagiat détecté (seuil > 0.7).";
+    } else container.innerText = "Aucun plagiat détecté (seuil > 0.5).";
 }
 
 // ---------------- Recherche par image ----------------

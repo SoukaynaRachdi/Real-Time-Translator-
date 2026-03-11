@@ -163,29 +163,54 @@ def similarite_deux_textes():
 
 @app.route("/plagiat", methods=["POST"])
 def plagiat():
-    data = request.json
-    texte = data.get("texte", "")
+    data = request.get_json()
+
+    if not data:
+        return jsonify({"error": "Requête invalide (JSON manquant)"}), 400
+
+    texte = data.get("texte", "").strip()
 
     if not texte:
         return jsonify({"error": "Texte vide !"}), 400
 
     try:
         docs = list(collection_traduction.find({}))
-        seuil = 0.7
+        seuil = 0.5
         resultats = []
 
         for doc in docs:
-            score = difflib.SequenceMatcher(None, texte, doc["texte_traduit"]).ratio()
-            if score >= seuil:
+            texte_original = doc.get("texte_original", "")
+            texte_traduit = doc.get("texte_traduit", "")
+
+            # Calcul similarité avec original
+            score_original = difflib.SequenceMatcher(
+                None, texte, texte_original
+            ).ratio()
+
+            # Calcul similarité avec traduction
+            score_traduit = difflib.SequenceMatcher(
+                None, texte, texte_traduit
+            ).ratio()
+
+            # On prend le score le plus élevé
+            score_final = max(score_original, score_traduit)
+
+            if score_final >= seuil:
                 resultats.append({
-                    "texte_original": doc["texte_original"],
-                    "texte_traduit": doc["texte_traduit"],
-                    "score": score
+                    "source_originale": texte_original,
+                    "texte_traduit": texte_traduit,
+                    "score": round(score_final, 2)
                 })
 
         resultats.sort(key=lambda x: x["score"], reverse=True)
-        return jsonify({"plagiat": resultats})
+
+        return jsonify({
+            "nombre_sources": len(resultats),
+            "plagiat": resultats
+        })
+
     except Exception as e:
+        print("Erreur plagiat:", e)
         return jsonify({"error": str(e)}), 500
 
 # -------------------------- Upload et recherche d'images --------------------------
@@ -205,8 +230,7 @@ def images():
             path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
             file.save(path)
             emb = get_image_embedding(path)
-            collection_images.insert_one({"filename": filename, "path": path, "embedding": emb})
-            es.index(index=INDEX_NAME, document={"filename": filename, "path": path, "embedding": emb})
+            collection_images.insert_one({"filename": filename, "embedding": emb})
             flash("Image uploaded successfully!")
             return redirect(url_for("images"))
 
@@ -225,9 +249,13 @@ def images():
                     continue
                 score = cosine_similarity(query_emb, np.array(doc["embedding"]))
                 if score >= SIMILARITY_THRESHOLD:
-                    sims.append((score, doc["filename"]))
+                    if os.path.exists(os.path.join(app.config["UPLOAD_FOLDER"], doc["filename"])):
+                        sims.append({
+                            "filename": doc["filename"],
+                            "score": round(score, 2)
+                            })
 
-            sims.sort(reverse=True)
+            sims.sort(key=lambda x: x["score"], reverse=True)
             results = sims[:5]
 
     return render_template("index.html", image_results=results)
